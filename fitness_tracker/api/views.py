@@ -1,57 +1,56 @@
-from rest_framework import viewsets, generics, permissions
-from django.contrib.auth.models import User        # <-- Add this
+# apps/activities/views.py
+from rest_framework import viewsets, permissions, filters
 from .models import Activity
-from .serializers import ActivitySerializer, UserSerializer, UserSignupSerializer
-from rest_framework.response import Response
+from .serializers import ActivitySerializer, UserSerializer
+from .permissions import IsOwner
+from django.contrib.auth.models import User
 from rest_framework.decorators import action
-from django.utils import timezone
+from rest_framework.response import Response
+from django.db.models import Sum
 
-# -----------------------------
-# Activity CRUD ViewSet
-# -----------------------------
-class ActivityViewSet(viewsets.ModelViewSet):
-    serializer_class = ActivitySerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        # Return only the activities of the logged-in user
-        return Activity.objects.filter(user=self.request.user)
-
-    def perform_create(self, serializer):
-        # Automatically assign the logged-in user to the activity
-        serializer.save(user=self.request.user)
-
-
-# -----------------------------
-# User CRUD ViewSet (optional)
-# -----------------------------
+# User ViewSet
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    permission_classes = [permissions.IsAdminUser]  # Only admins can see all users
+    permission_classes = [permissions.IsAdminUser]  # Only admin can list users
 
+# Activity ViewSet
+class ActivityViewSet(viewsets.ModelViewSet):
+    serializer_class = ActivitySerializer
+    permission_classes = [permissions.IsAuthenticated, IsOwner]
+    filter_backends = [filters.OrderingFilter, filters.SearchFilter]
+    search_fields = ['activity_type']
+    ordering_fields = ['date', 'duration', 'calories_burned']
 
-# -----------------------------
-# Signup View
-# -----------------------------
-class UserSignupView(generics.CreateAPIView):
-    serializer_class = UserSignupSerializer
-    permission_classes = [permissions.AllowAny]  # Anyone can sign up
+    def get_queryset(self):
+        # Only return activities of the logged-in user
+        user = self.request.user
+        queryset = Activity.objects.filter(user=user)
+        
+        # Optional filters: by date range
+        start_date = self.request.query_params.get('start_date')
+        end_date = self.request.query_params.get('end_date')
+        activity_type = self.request.query_params.get('activity_type')
+        if start_date and end_date:
+            queryset = queryset.filter(date__range=[start_date, end_date])
+        if activity_type:
+            queryset = queryset.filter(activity_type=activity_type)
+        return queryset
 
-
-# -----------------------------
-# Today’s Activities List
-# -----------------------------
-from rest_framework.response import Response
-from rest_framework.decorators import action
-from django.utils import timezone
-
-class TodayActivityList(viewsets.ViewSet):
-    permission_classes = [permissions.IsAuthenticated]
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
 
     @action(detail=False, methods=['get'])
-    def list(self, request):
-        today = timezone.now().date()
-        activities = Activity.objects.filter(user=request.user, date=today)
-        serializer = ActivitySerializer(activities, many=True)
-        return Response(serializer.data)
+    def summary(self, request):
+        """
+        Return total duration, distance, calories for the user
+        """
+        activities = self.get_queryset()
+        total_duration = activities.aggregate(Sum('duration'))['duration__sum'] or 0
+        total_distance = activities.aggregate(Sum('distance'))['distance__sum'] or 0
+        total_calories = activities.aggregate(Sum('calories_burned'))['calories_burned__sum'] or 0
+        return Response({
+            "total_duration": total_duration,
+            "total_distance": total_distance,
+            "total_calories": total_calories
+        })
