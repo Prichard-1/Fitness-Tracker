@@ -1,52 +1,57 @@
-from rest_framework import viewsets, generics, filters
-from django.utils import timezone
-from django.contrib.auth.models import User
+from rest_framework import viewsets, generics, permissions
+from django.contrib.auth.models import User        # <-- Add this
 from .models import Activity
-from .serializers import ActivitySerializer, UserSerializer
-from .permissions import IsOwner
-from rest_framework.permissions import AllowAny
+from .serializers import ActivitySerializer, UserSerializer, UserSignupSerializer
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from django.db.models import Sum
+from django.utils import timezone
 
-# Users
-class UserViewSet(viewsets.ModelViewSet):
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
-    permission_classes = [AllowAny]
-
-# Activities CRUD
+# -----------------------------
+# Activity CRUD ViewSet
+# -----------------------------
 class ActivityViewSet(viewsets.ModelViewSet):
     serializer_class = ActivitySerializer
-    permission_classes = [IsOwner]
-
-    filter_backends = [filters.OrderingFilter, filters.SearchFilter]
-    ordering_fields = ['date', 'duration', 'calories_burned']
-    search_fields = ['activity_type']
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        # Return only the activities of the logged-in user
         return Activity.objects.filter(user=self.request.user)
 
     def perform_create(self, serializer):
+        # Automatically assign the logged-in user to the activity
         serializer.save(user=self.request.user)
 
-    # Metrics endpoint
+
+# -----------------------------
+# User CRUD ViewSet (optional)
+# -----------------------------
+class UserViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    permission_classes = [permissions.IsAdminUser]  # Only admins can see all users
+
+
+# -----------------------------
+# Signup View
+# -----------------------------
+class UserSignupView(generics.CreateAPIView):
+    serializer_class = UserSignupSerializer
+    permission_classes = [permissions.AllowAny]  # Anyone can sign up
+
+
+# -----------------------------
+# Today’s Activities List
+# -----------------------------
+from rest_framework.response import Response
+from rest_framework.decorators import action
+from django.utils import timezone
+
+class TodayActivityList(viewsets.ViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+
     @action(detail=False, methods=['get'])
-    def metrics(self, request):
-        queryset = self.get_queryset()
-        total_duration = queryset.aggregate(Sum('duration'))['duration__sum'] or 0
-        total_distance = queryset.aggregate(Sum('distance'))['distance__sum'] or 0
-        total_calories = queryset.aggregate(Sum('calories_burned'))['calories_burned__sum'] or 0
-        return Response({
-            'total_duration': total_duration,
-            'total_distance': total_distance,
-            'total_calories': total_calories
-        })
-
-# Today's activity
-class TodayActivityList(generics.ListAPIView):
-    serializer_class = ActivitySerializer
-
-    def get_queryset(self):
+    def list(self, request):
         today = timezone.now().date()
-        return Activity.objects.filter(user=self.request.user, date=today)
+        activities = Activity.objects.filter(user=request.user, date=today)
+        serializer = ActivitySerializer(activities, many=True)
+        return Response(serializer.data)

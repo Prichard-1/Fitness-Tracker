@@ -1,17 +1,13 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import UserViewSet, ActivityViewSet, TodayActivityList
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from .views import ActivityViewSet, UserViewSet, UserSignupView, TodayActivityList
 
 router = DefaultRouter()
-router.register(r'users', UserViewSet)
-router.register(r'activities', ActivityViewSet)
+router.register('activities', ActivityViewSet, basename='activities')
+router.register('users', UserViewSet, basename='users')
 
 urlpatterns = [
+    path('signup/', UserSignupView.as_view(), name='signup'),
+    path('activities/today/', TodayActivityList.as_view({'get':'list'}), name='activities-today'),
     path('', include(router.urls)),
-    path('activities/today/', TodayActivityList.as_view(), name='today-activities'),
-    path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 ]
-
-
