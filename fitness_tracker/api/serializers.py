@@ -10,12 +10,7 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ['id', 'username', 'email', 'password']
 
     def create(self, validated_data):
-        user = User.objects.create_user(
-            username=validated_data['username'],
-            email=validated_data['email'],
-            password=validated_data['password']
-        )
-        return user
+        return User.objects.create_user(**validated_data)
 
 class ActivitySerializer(serializers.ModelSerializer):
     user = serializers.ReadOnlyField(source='user.username')
@@ -23,4 +18,3 @@ class ActivitySerializer(serializers.ModelSerializer):
     class Meta:
         model = Activity
         fields = ['id', 'user', 'activity_type', 'duration', 'distance', 'calories_burned', 'date']
-
