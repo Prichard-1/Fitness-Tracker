@@ -8,9 +8,8 @@ class Activity(models.Model):
         ('Weightlifting', 'Weightlifting'),
         ('Swimming', 'Swimming'),
         ('Walking', 'Walking'),
-        # Add more types as needed
     ]
-    
+
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='activities')
     activity_type = models.CharField(max_length=50, choices=ACTIVITY_TYPES)
     duration = models.PositiveIntegerField(help_text="Duration in minutes")
