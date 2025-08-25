@@ -1,13 +1,12 @@
-from django.urls import path, include
+# apps/activities/urls.py
 from rest_framework.routers import DefaultRouter
-from .views import ActivityViewSet, UserViewSet, UserSignupView, TodayActivityList
+from .views import ActivityViewSet, UserViewSet
+from django.urls import path, include
 
 router = DefaultRouter()
-router.register('activities', ActivityViewSet, basename='activities')
-router.register('users', UserViewSet, basename='users')
+router.register(r'users', UserViewSet)
+router.register(r'activities', ActivityViewSet, basename='activity')
 
 urlpatterns = [
-    path('signup/', UserSignupView.as_view(), name='signup'),
-    path('activities/today/', TodayActivityList.as_view({'get':'list'}), name='activities-today'),
     path('', include(router.urls)),
 ]
